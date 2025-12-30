@@ -1,4 +1,11 @@
-import { Column, Entity, PrimaryGeneratedColumn } from 'typeorm';
+import { Blog } from 'src/modules/blog/entities/blog.entity';
+import {
+  Column,
+  Entity,
+  JoinColumn,
+  ManyToOne,
+  PrimaryGeneratedColumn,
+} from 'typeorm';
 
 @Entity('post')
 export class Post {
@@ -7,12 +14,9 @@ export class Post {
   })
   id: number;
 
-  @Column({
-    type: 'int',
-    name: 'blog_id',
-    nullable: false,
-  })
-  blogId: number;
+  @ManyToOne(() => Blog, (blog) => blog.id)
+  @JoinColumn({ name: 'blog_id' })
+  blog: Blog;
 
   @Column({
     type: 'varchar',
