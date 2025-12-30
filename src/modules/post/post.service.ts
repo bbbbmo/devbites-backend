@@ -13,10 +13,14 @@ export class PostService {
   async getAllPosts(): Promise<Post[]> {
     return await this.postRepository.find({
       order: { createdAt: 'DESC' }, // 최신순 정렬
+      relations: ['blog'],
     });
   }
 
   async getPostById(id: number): Promise<Post | null> {
-    return await this.postRepository.findOne({ where: { id } });
+    return await this.postRepository.findOne({
+      where: { id },
+      relations: ['blog'],
+    });
   }
 }
