@@ -3,6 +3,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { PostModule } from './modules/post/post.module';
 import { ConfigModule } from '@nestjs/config';
 import { BlogModule } from './modules/blog/blog.module';
+import { RssModule } from './modules/rss/rss.module';
 
 @Module({
   imports: [
@@ -22,6 +23,7 @@ import { BlogModule } from './modules/blog/blog.module';
     }),
     PostModule,
     BlogModule,
+    RssModule,
   ],
   controllers: [],
   providers: [],
