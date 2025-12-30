@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { PostModule } from './modules/post/post.module';
 import { ConfigModule } from '@nestjs/config';
+import { BlogModule } from './modules/blog/blog.module';
 
 @Module({
   imports: [
@@ -20,6 +21,7 @@ import { ConfigModule } from '@nestjs/config';
       synchronize: false,
     }),
     PostModule,
+    BlogModule,
   ],
   controllers: [],
   providers: [],
