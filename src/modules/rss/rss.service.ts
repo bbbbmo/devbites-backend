@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Post } from '../post/entities/post.entity';
 import { Repository } from 'typeorm';
@@ -16,6 +16,7 @@ type RssData = {
 
 @Injectable()
 export class RssService {
+  private readonly logger = new Logger(RssService.name);
   private rssUrls: string[] = [
     'https://d2.naver.com/d2.atom',
     'https://techblog.woowahan.com/feed',
@@ -37,15 +38,23 @@ export class RssService {
           const exists = await this.postRepository.findOneBy({
             sourceUrl: item.link,
           });
+          this.logger.log('\n--- 새 포스트 ---');
+          this.logger.log(`제목: ${item.title}`);
+          this.logger.log(`링크: ${item.link}`);
+          this.logger.log(
+            `요약: ${item.summary || item.description || '(없음)'}`,
+          );
+          this.logger.log(`발행일: ${item.pubDate?.toISOString()}`);
+          this.logger.log(`Blog ID: ${item.blogId || 1}`);
           if (!exists) {
-            await this.postRepository.save({
-              blogId: item.blogId || 1, // 적절한 blogId 설정 필요
-              title: item.title,
-              shortSummary: item.summary || '',
-              detailedSummary: item.description || '',
-              sourceUrl: item.link,
-              publishedAt: item.pubDate || new Date(),
-            });
+            // await this.postRepository.save({
+            //   blogId: item.blogId || 1, // 적절한 blogId 설정 필요
+            //   title: item.title,
+            //   shortSummary: item.summary || '',
+            //   detailedSummary: item.description || '',
+            //   sourceUrl: item.link,
+            //   publishedAt: item.pubDate || new Date(),
+            // });
           }
         }
       } catch (error) {
