@@ -11,7 +11,7 @@ async function bootstrap() {
   });
 
   const rssService = app.get(RssService);
-  await rssService.fetchRssData();
+  await rssService.saveRssToPost();
 
   await app.listen(process.env.PORT ?? 3000);
 }

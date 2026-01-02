@@ -5,6 +5,7 @@ import {
   JoinColumn,
   ManyToOne,
   PrimaryGeneratedColumn,
+  RelationId,
 } from 'typeorm';
 
 @Entity('post')
@@ -13,6 +14,9 @@ export class Post {
     type: 'int',
   })
   id: number;
+
+  @RelationId((post: Post) => post.blog)
+  blogId: number;
 
   @ManyToOne(() => Blog, (blog) => blog.id)
   @JoinColumn({ name: 'blog_id' })
@@ -25,6 +29,14 @@ export class Post {
     nullable: false,
   })
   title: string;
+
+  @Column({
+    type: 'varchar',
+    name: 'author',
+    length: 50,
+    nullable: false,
+  })
+  author: string;
 
   @Column({
     type: 'text',

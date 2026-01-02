@@ -13,4 +13,18 @@ export class Blog {
     length: 100,
   })
   name: string;
+
+  @Column({
+    type: 'varchar',
+    name: 'rss_url',
+    length: 2048,
+  })
+  rssUrl: string;
+
+  @Column({
+    type: 'varchar',
+    name: 'blog_url',
+    length: 2048,
+  })
+  blogUrl: string;
 }
