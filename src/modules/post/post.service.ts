@@ -11,16 +11,32 @@ export class PostService {
   ) {}
 
   async getAllPosts(): Promise<Post[]> {
-    return await this.postRepository.find({
-      order: { createdAt: 'DESC' }, // 최신순 정렬
-      relations: ['blog'],
-    });
+    return await this.postRepository
+      .createQueryBuilder('post')
+      .leftJoinAndSelect('post.blog', 'blog')
+      .leftJoinAndSelect('post.rssCategories', 'rssCategories')
+      .select([
+        'post',
+        'blog',
+        'rssCategories.id',
+        'rssCategories.name', // postId 제외
+      ])
+      .orderBy('post.createdAt', 'DESC')
+      .getMany();
   }
 
   async getPostById(id: number): Promise<Post | null> {
-    return await this.postRepository.findOne({
-      where: { id },
-      relations: ['blog'],
-    });
+    return await this.postRepository
+      .createQueryBuilder('post')
+      .leftJoinAndSelect('post.blog', 'blog')
+      .leftJoinAndSelect('post.rssCategories', 'rssCategories')
+      .select([
+        'post',
+        'blog',
+        'rssCategories.id',
+        'rssCategories.name', // postId 제외
+      ])
+      .where('post.id = :id', { id })
+      .getOne();
   }
 }

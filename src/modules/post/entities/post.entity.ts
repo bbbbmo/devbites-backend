@@ -1,9 +1,11 @@
 import { Blog } from 'src/modules/blog/entities/blog.entity';
+import { RssCategory } from 'src/modules/rss/entities/rss-category.entity';
 import {
   Column,
   Entity,
   JoinColumn,
   ManyToOne,
+  OneToMany,
   PrimaryGeneratedColumn,
   RelationId,
 } from 'typeorm';
@@ -21,6 +23,9 @@ export class Post {
   @ManyToOne(() => Blog, (blog) => blog.id)
   @JoinColumn({ name: 'blog_id' })
   blog: Blog;
+
+  @OneToMany(() => RssCategory, (rssCategory) => rssCategory.post)
+  rssCategories: RssCategory[];
 
   @Column({
     type: 'varchar',
