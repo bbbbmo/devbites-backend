@@ -10,6 +10,7 @@ import { htmlContentToText } from 'src/common/utils/htmlContentToText';
 import { CreateRssCategoryDto } from './dto/create-rss-category.dto';
 import { RssCategory } from './entities/rss-category.entity';
 import { DataSource } from 'typeorm';
+import { validateKorean } from 'src/common/utils/validateKorean';
 
 @Injectable()
 export class RssService {
@@ -127,6 +128,16 @@ export class RssService {
         this.logger.log(`이미 존재하는 게시글 건너뛰기: ${item.title}`);
         continue;
       }
+
+      if (!item.title || !item.fullContent) {
+        this.logger.log(`제목 또는 내용이 없는 게시글 건너뛰기: ${item.title}`);
+      }
+
+      if (!validateKorean(item.title! + item.fullContent!)) {
+        this.logger.log(`한글이 아닌 게시글 건너뛰기: ${item.title}`);
+        continue;
+      }
+
       await this.dataSource.transaction(async (manager) => {
         try {
           const publishedAt = item.pubDate
