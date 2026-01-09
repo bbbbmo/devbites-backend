@@ -31,6 +31,7 @@
     "class-validator": "^0.14.3",
     "html-to-text": "^9.0.5",
     "mysql2": "^3.16.0",
+    "openai": "^6.15.0",
     "reflect-metadata": "^0.2.2",
     "rss-parser": "^3.13.0",
     "rxjs": "^7.8.1",
