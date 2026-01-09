@@ -11,6 +11,7 @@ import { CreateRssCategoryDto } from './dto/create-rss-category.dto';
 import { RssCategory } from './entities/rss-category.entity';
 import { DataSource } from 'typeorm';
 import { validateKorean } from 'src/common/utils/validateKorean';
+import { GptService } from '../ai/gpt.service';
 
 @Injectable()
 export class RssService {
@@ -24,6 +25,7 @@ export class RssService {
     @InjectRepository(RssCategory)
     private readonly rssCategoryRepository: Repository<RssCategory>,
     private readonly dataSource: DataSource, // DataSource 주입 추가
+    private readonly gptService: GptService,
   ) {}
 
   async createRssCategory(createRssCategoryDto: CreateRssCategoryDto) {
@@ -144,14 +146,18 @@ export class RssService {
             ? new Date(item.pubDate)
             : new Date();
 
+          const plainTextContent = htmlContentToText(item.fullContent || '');
+
+          this.logger.log(`GPT 요약 생성 중: ${item.title}`);
+          const { shortSummary, detailedSummary } =
+            await this.gptService.summarizePost(plainTextContent);
+
           const createPostDto = new CreatePostDto();
           createPostDto.blogId = blogId;
           createPostDto.title = item.title || '제목 없음';
           createPostDto.author = item.creator || '작성자 없음';
-          createPostDto.shortSummary = item.summary || '요약 없음';
-          createPostDto.detailedSummary = item.fullContent
-            ? htmlContentToText(item.fullContent)
-            : '상세 설명 없음';
+          createPostDto.shortSummary = shortSummary;
+          createPostDto.detailedSummary = detailedSummary;
           createPostDto.sourceUrl = sourceUrl;
           createPostDto.publishedAt = publishedAt;
 
