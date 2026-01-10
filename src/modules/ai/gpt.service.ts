@@ -21,20 +21,33 @@ export class GptService {
     content: string,
   ): Promise<{ shortSummary: string; detailedSummary: string }> {
     try {
-      const prompt = `Summarize the following blog post.
+      const prompt = `아래에 제공된 블로그 게시글을 요약하십시오.
 
-      Requirements:
-      - shortSummary: 1~2 sentences covering the main idea
-      - detailedSummary: ~500 characters, key points only, no missing info
+      요약 규칙:
+      1. 출력은 반드시 JSON 객체 형식으로만 작성할 것
+      2. JSON 외의 설명 텍스트는 절대 포함하지 말 것
+      3. 중요 핵심 단어, 기술 용어, 키워드는 \`\`(백틱)으로 감싸 코드 표시로 표현할 것
+      4. 문체는 객관적이고 설명적인 '~니다.' 체로 통일할 것
+      5. 추측, 의견, 감정 표현은 포함하지 말 것
+      6. 한국어로 작성할 것
       
-      Return ONLY valid JSON in this format:
+      출력 형식:
       {
         "shortSummary": string,
         "detailedSummary": string
       }
       
-      Text:
-      """${content}"""`;
+      세부 작성 기준:
+      - shortSummary:
+        - 전체 내용을 2~3문장으로 매우 간결하게 요약할 것
+      - detailedSummary:
+        - 주제별 소제목을 포함하여 구조적으로 요약할 것
+        - 각 소제목 아래에는 2~4문장으로 핵심만 정리할 것
+        - 소제목은 자연어 텍스트로 작성할 것 (기호 사용 금지)
+      
+      입력 블로그 게시글:
+      ${content}`;
+
       const response = await this.openai.chat.completions.create({
         model: 'gpt-4o-mini',
         messages: [

@@ -152,6 +152,10 @@ export class RssService {
           const { shortSummary, detailedSummary } =
             await this.gptService.summarizePost(plainTextContent);
 
+          this.logger.log(
+            `요약 생성 완료: ${item.title}, 요약 내용: ${shortSummary}, 상세 내용: ${detailedSummary}`,
+          );
+
           const createPostDto = new CreatePostDto();
           createPostDto.blogId = blogId;
           createPostDto.title = item.title || '제목 없음';
