@@ -4,14 +4,30 @@ import { Post } from '../post/entities/post.entity';
 import { In, Repository } from 'typeorm';
 import Parser, { Item } from 'rss-parser';
 import { Blog } from '../blog/entities/blog.entity';
-import { CreatePostDto } from '../post/dto/create-post.dto';
-import { validate } from 'class-validator';
 import { htmlContentToText } from 'src/common/utils/htmlContentToText';
 import { CreateRssCategoryDto } from './dto/create-rss-category.dto';
 import { RssCategory } from './entities/rss-category.entity';
 import { DataSource } from 'typeorm';
 import { validateKorean } from 'src/common/utils/validateKorean';
 import { GptService } from '../ai/gpt.service';
+import { Cron, CronExpression } from '@nestjs/schedule';
+
+type PreparedPost = {
+  blogId: number;
+  title: string;
+  author: string;
+  shortSummary: string;
+  detailedSummary: string;
+  sourceUrl: string;
+  publishedAt: Date;
+  categories: string[];
+};
+
+type FeedItem = {
+  item: Item & { fullContent?: string };
+  blogId: number;
+  sourceUrl: string;
+};
 
 @Injectable()
 export class RssService {
@@ -94,16 +110,19 @@ export class RssService {
     return new Set(existingPosts.map((post) => post.sourceUrl));
   }
 
-  async saveRssToPost() {
-    const feeds = await this.parseAllRss();
-
-    // 모든 피드 아이템의 URL 수집
-    const allSourceUrls: string[] = [];
-    const feedItems: Array<{
-      item: Item & { fullContent?: string };
+  /**
+   * RSS 피드 결과에서 모든 아이템과 URL을 수집
+   * @param feeds parseAllRss()의 결과
+   * @returns 수집된 sourceUrl 배열과 feedItems 배열
+   */
+  private collectFeedItems(
+    feeds: PromiseSettledResult<{
+      feed: Parser.Output<Item>;
       blogId: number;
-      sourceUrl: string;
-    }> = [];
+    }>[],
+  ): { allSourceUrls: string[]; feedItems: FeedItem[] } {
+    const allSourceUrls: string[] = [];
+    const feedItems: FeedItem[] = [];
 
     for (const result of feeds) {
       if (result.status !== 'fulfilled') {
@@ -121,94 +140,129 @@ export class RssService {
       }
     }
 
-    // 한 번의 쿼리로 존재하는 URL 조회
-    const existingUrls = await this.getExistingFeedItem(allSourceUrls);
+    return { allSourceUrls, feedItems };
+  }
 
-    // 존재하지 않는 아이템만 저장
-    for (const { item, blogId, sourceUrl } of feedItems) {
-      if (existingUrls.has(sourceUrl)) {
-        this.logger.log(`이미 존재하는 게시글 건너뛰기: ${item.title}`);
-        continue;
+  private async preparePosts(
+    feeds: PromiseSettledResult<{
+      feed: Parser.Output<Item>;
+      blogId: number;
+    }>[],
+  ): Promise<PreparedPost[]> {
+    const preparedPosts: PreparedPost[] = [];
+    try {
+      const { allSourceUrls, feedItems } = this.collectFeedItems(feeds);
+
+      // 한 번의 쿼리로 존재하는 URL 조회
+      const existingUrls = await this.getExistingFeedItem(allSourceUrls);
+
+      for (const { item, blogId, sourceUrl } of feedItems) {
+        if (existingUrls.has(sourceUrl)) {
+          this.logger.log(`이미 존재하는 게시글 건너뛰기: ${item.title}`);
+          continue;
+        }
+
+        if (!item.title || !item.fullContent) {
+          this.logger.log(
+            `제목 또는 내용이 없는 게시글 건너뛰기: ${item.title}`,
+          );
+          continue;
+        }
+
+        if (!validateKorean(item.title + item.fullContent)) {
+          this.logger.log(`한글이 아닌 게시글 건너뛰기: ${item.title}`);
+          continue;
+        }
+
+        const plainTextContent = htmlContentToText(item.fullContent || '');
+
+        this.logger.log(`GPT 요약 생성 중: ${item.title}`);
+
+        const { shortSummary, detailedSummary } =
+          await this.gptService.summarizePost(plainTextContent);
+
+        this.logger.log(
+          `요약 생성 완료: ${item.title}, 요약 내용: ${shortSummary}, 상세 내용: ${detailedSummary}`,
+        );
+
+        preparedPosts.push({
+          blogId,
+          title: item.title || '제목 없음',
+          author: item.creator || '작성자 없음',
+          shortSummary,
+          detailedSummary,
+          sourceUrl,
+          publishedAt: item.pubDate ? new Date(item.pubDate) : new Date(),
+          categories: item.categories || [],
+        });
       }
 
-      if (!item.title || !item.fullContent) {
-        this.logger.log(`제목 또는 내용이 없는 게시글 건너뛰기: ${item.title}`);
-      }
+      return preparedPosts;
+    } catch (error) {
+      this.logger.error('게시글 준비 실패:', error);
+      throw error;
+    }
+  }
 
-      if (!validateKorean(item.title! + item.fullContent!)) {
-        this.logger.log(`한글이 아닌 게시글 건너뛰기: ${item.title}`);
-        continue;
-      }
+  private async savePostWithCategories(preparedPosts: PreparedPost[]) {
+    const CHUNK_SIZE = 10;
+
+    for (let i = 0; i < preparedPosts.length; i += CHUNK_SIZE) {
+      const chunk = preparedPosts.slice(i, i + CHUNK_SIZE);
 
       await this.dataSource.transaction(async (manager) => {
-        try {
-          const publishedAt = item.pubDate
-            ? new Date(item.pubDate)
-            : new Date();
-
-          const plainTextContent = htmlContentToText(item.fullContent || '');
-
-          this.logger.log(`GPT 요약 생성 중: ${item.title}`);
-          const { shortSummary, detailedSummary } =
-            await this.gptService.summarizePost(plainTextContent);
-
-          this.logger.log(
-            `요약 생성 완료: ${item.title}, 요약 내용: ${shortSummary}, 상세 내용: ${detailedSummary}`,
-          );
-
-          const createPostDto = new CreatePostDto();
-          createPostDto.blogId = blogId;
-          createPostDto.title = item.title || '제목 없음';
-          createPostDto.author = item.creator || '작성자 없음';
-          createPostDto.shortSummary = shortSummary;
-          createPostDto.detailedSummary = detailedSummary;
-          createPostDto.sourceUrl = sourceUrl;
-          createPostDto.publishedAt = publishedAt;
-
-          const errors = await validate(createPostDto);
-          if (errors.length > 0) {
-            this.logger.warn(
-              `DTO 검증 실패 (${item.title}):`,
-              errors.map((e) => Object.values(e.constraints || {})).flat(),
-            );
-            throw new Error('DTO 검증 실패');
-          }
-
+        for (const postData of chunk) {
           const post = manager.create(Post, {
-            blog: { id: createPostDto.blogId } as Blog,
-            title: createPostDto.title,
-            author: createPostDto.author,
-            shortSummary: createPostDto.shortSummary,
-            detailedSummary: createPostDto.detailedSummary,
-            sourceUrl: createPostDto.sourceUrl,
-            publishedAt: createPostDto.publishedAt,
+            blog: { id: postData.blogId } as Blog,
+            title: postData.title,
+            author: postData.author,
+            shortSummary: postData.shortSummary,
+            detailedSummary: postData.detailedSummary,
+            sourceUrl: postData.sourceUrl,
+            publishedAt: postData.publishedAt,
           });
 
           const savedPost = await manager.save(post);
-          this.logger.log(`포스트 저장 완료 (${savedPost.title})`);
-
-          if (Array.isArray(item.categories) && item.categories.length > 0) {
-            for (const categoryName of item.categories || []) {
-              if (categoryName && typeof categoryName === 'string') {
-                const rssCategory = manager.create(RssCategory, {
-                  post: { id: savedPost.id } as Post,
-                  name: categoryName.trim().substring(0, 50),
-                });
-                await manager.save(rssCategory);
-                this.logger.log(
-                  `카테고리 저장 완료: ${categoryName} (Post: ${savedPost.title})`,
-                );
-              }
-            }
-          }
-        } catch (error) {
-          this.logger.error(
-            `포스트 저장 실패 (${item.title}):`,
-            error instanceof Error ? error.message : String(error),
+          this.logger.log(
+            `포스트 저장 완료: ${savedPost.title}\n 짧은 요약: ${savedPost.shortSummary}\n 상세 요약: ${savedPost.detailedSummary}`,
           );
-          throw error;
+
+          if (
+            !Array.isArray(postData.categories) ||
+            postData.categories.length === 0
+          ) {
+            this.logger.log(
+              `카테고리가 없는 게시글 건너뛰기: ${savedPost.title}`,
+            );
+            continue;
+          }
+
+          for (const categoryName of postData.categories) {
+            const category = manager.create(RssCategory, {
+              post: { id: savedPost.id } as Post,
+              name: categoryName.trim().substring(0, 50),
+            });
+            await manager.save(category);
+            this.logger.log(`카테고리 저장 완료: ${category.name}`);
+          }
         }
       });
+
+      this.logger.log(`배치 저장 완료: ${i + 1} ~ ${i + chunk.length}`);
     }
+  }
+
+  @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT, {
+    name: 'saveRssToPost',
+    timeZone: 'Asia/Seoul',
+  })
+  async saveRssToPost() {
+    const feeds = await this.parseAllRss();
+    const preparedPosts = await this.preparePosts(feeds);
+    if (preparedPosts.length === 0) {
+      this.logger.log('저장할 게시글이 없습니다.');
+      return;
+    }
+    await this.savePostWithCategories(preparedPosts);
   }
 }

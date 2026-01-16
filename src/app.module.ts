@@ -4,6 +4,7 @@ import { PostModule } from './modules/post/post.module';
 import { ConfigModule } from '@nestjs/config';
 import { BlogModule } from './modules/blog/blog.module';
 import { RssModule } from './modules/rss/rss.module';
+import { ScheduleModule } from '@nestjs/schedule';
 
 @Module({
   imports: [
@@ -21,6 +22,7 @@ import { RssModule } from './modules/rss/rss.module';
       entities: [__dirname + '/**/*.entity{.ts,.js}'],
       synchronize: true,
     }),
+    ScheduleModule.forRoot(),
     PostModule,
     BlogModule,
     RssModule,

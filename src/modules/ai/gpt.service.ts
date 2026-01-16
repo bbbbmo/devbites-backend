@@ -17,11 +17,8 @@ export class GptService {
     });
   }
 
-  async summarizePost(
-    content: string,
-  ): Promise<{ shortSummary: string; detailedSummary: string }> {
-    try {
-      const prompt = `아래에 제공된 블로그 게시글을 요약하십시오.
+  private getPrompt(content: string): string {
+    return `아래에 제공된 블로그 게시글을 요약하십시오.
 
       요약 규칙:
       1. 출력은 반드시 JSON 객체 형식으로만 작성할 것
@@ -51,6 +48,13 @@ export class GptService {
       
       입력 블로그 게시글:
       ${content}`;
+  }
+
+  async summarizePost(
+    content: string,
+  ): Promise<{ shortSummary: string; detailedSummary: string }> {
+    try {
+      const prompt = this.getPrompt(content);
 
       const response = await this.openai.chat.completions.create({
         model: 'gpt-4o-mini',
