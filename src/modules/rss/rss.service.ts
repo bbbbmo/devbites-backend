@@ -9,8 +9,10 @@ import { CreateRssCategoryDto } from './dto/create-rss-category.dto';
 import { RssCategory } from './entities/rss-category.entity';
 import { DataSource } from 'typeorm';
 import { validateKorean } from 'src/common/utils/validateKorean';
-import { GptService } from '../ai/gpt.service';
 import { Cron, CronExpression } from '@nestjs/schedule';
+import { BatchService } from '../ai/batch.service';
+import { BatchResult, BatchTarget } from 'src/common/types/batch.types';
+import { BatchMetaService } from '../ai/batch-meta.service';
 
 type PreparedPost = {
   blogId: number;
@@ -41,7 +43,8 @@ export class RssService {
     @InjectRepository(RssCategory)
     private readonly rssCategoryRepository: Repository<RssCategory>,
     private readonly dataSource: DataSource, // DataSource 주입 추가
-    private readonly gptService: GptService,
+    private readonly batchService: BatchService,
+    private readonly batchMetaService: BatchMetaService,
   ) {}
 
   async createRssCategory(createRssCategoryDto: CreateRssCategoryDto) {
@@ -49,7 +52,7 @@ export class RssService {
     return this.rssCategoryRepository.save(rssCategory);
   }
 
-  async parseRss(rssUrl: string) {
+  private async parseRss(rssUrl: string) {
     try {
       const parser = new Parser({
         customFields: {
@@ -66,7 +69,7 @@ export class RssService {
     }
   }
 
-  async parseAllRss() {
+  private async parseAllRss() {
     const blogs = await this.blogRepository.find();
     const promises = blogs.map((blog) =>
       this.parseRss(blog.rssUrl)
@@ -95,7 +98,9 @@ export class RssService {
     return feeds;
   }
 
-  async getExistingFeedItem(sourceUrls: string[]): Promise<Set<string>> {
+  private async getExistingFeedItem(
+    sourceUrls: string[],
+  ): Promise<Set<string>> {
     if (sourceUrls.length === 0) {
       return new Set();
     }
@@ -143,65 +148,111 @@ export class RssService {
     return { allSourceUrls, feedItems };
   }
 
-  private async preparePosts(
+  private async prepareBatchTargets(
     feeds: PromiseSettledResult<{
       feed: Parser.Output<Item>;
       blogId: number;
     }>[],
-  ): Promise<PreparedPost[]> {
-    const preparedPosts: PreparedPost[] = [];
-    try {
-      const { allSourceUrls, feedItems } = this.collectFeedItems(feeds);
+  ): Promise<BatchTarget[]> {
+    const targets: BatchTarget[] = [];
 
-      // 한 번의 쿼리로 존재하는 URL 조회
-      const existingUrls = await this.getExistingFeedItem(allSourceUrls);
+    const { allSourceUrls, feedItems } = this.collectFeedItems(feeds);
+    const existingUrls = await this.getExistingFeedItem(allSourceUrls);
 
-      for (const { item, blogId, sourceUrl } of feedItems) {
-        if (existingUrls.has(sourceUrl)) {
-          this.logger.log(`이미 존재하는 게시글 건너뛰기: ${item.title}`);
-          continue;
-        }
-
-        if (!item.title || !item.fullContent) {
-          this.logger.log(
-            `제목 또는 내용이 없는 게시글 건너뛰기: ${item.title}`,
-          );
-          continue;
-        }
-
-        if (!validateKorean(item.title + item.fullContent)) {
-          this.logger.log(`한글이 아닌 게시글 건너뛰기: ${item.title}`);
-          continue;
-        }
-
-        const plainTextContent = htmlContentToText(item.fullContent || '');
-
-        this.logger.log(`GPT 요약 생성 중: ${item.title}`);
-
-        const { shortSummary, detailedSummary } =
-          await this.gptService.summarizePost(plainTextContent);
-
-        this.logger.log(
-          `요약 생성 완료: ${item.title}, 요약 내용: ${shortSummary}, 상세 내용: ${detailedSummary}`,
-        );
-
-        preparedPosts.push({
-          blogId,
-          title: item.title || '제목 없음',
-          author: item.creator || '작성자 없음',
-          shortSummary,
-          detailedSummary,
-          sourceUrl,
-          publishedAt: item.pubDate ? new Date(item.pubDate) : new Date(),
-          categories: item.categories || [],
-        });
+    for (const { item, blogId, sourceUrl } of feedItems) {
+      let id = 0;
+      if (existingUrls.has(sourceUrl)) {
+        this.logger.log(`이미 존재하는 게시글 건너뛰기: ${item.title}`);
+        continue;
       }
 
-      return preparedPosts;
-    } catch (error) {
-      this.logger.error('게시글 준비 실패:', error);
-      throw error;
+      if (
+        !item.title ||
+        item.title.trim() === '' ||
+        !item.fullContent ||
+        item.fullContent.trim() === ''
+      ) {
+        this.logger.log(`제목 또는 내용이 없는 게시글 건너뛰기: ${item.title}`);
+        continue;
+      }
+
+      if (!validateKorean(item.title + item.fullContent)) {
+        this.logger.log(`한글이 아닌 게시글 건너뛰기: ${item.title}`);
+        continue;
+      }
+
+      targets.push({
+        id: id++,
+        blogId,
+        title: item.title,
+        author: item.creator || '작성자 없음',
+        sourceUrl,
+        publishedAt: item.pubDate ? new Date(item.pubDate) : new Date(),
+        categories: item.categories || [],
+        content: htmlContentToText(item.fullContent),
+      });
     }
+
+    return targets;
+  }
+
+  @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT, {
+    name: 'createGptBatch',
+    timeZone: 'Asia/Seoul',
+  })
+  async createGptBatch() {
+    const feeds = await this.parseAllRss();
+    const targets = await this.prepareBatchTargets(feeds);
+
+    if (targets.length === 0) {
+      this.logger.log('Batch 생성 대상 없음');
+      return;
+    }
+
+    this.batchService.createBatchInput(
+      targets.map((target) => ({
+        id: target.id,
+        content: target.content,
+      })),
+    );
+
+    const batch = await this.batchService.processBatch();
+
+    await this.batchMetaService.saveBatchMeta(batch.id, targets);
+  }
+
+  private mergeBatchResult(
+    targets: BatchTarget[],
+    results: BatchResult[],
+  ): PreparedPost[] {
+    const resultMap = new Map(
+      results.map((r) => [Number(r.custom_id), r.response.output_parsed]),
+    );
+
+    return targets
+      .filter((t) => resultMap.has(t.id))
+      .map((t) => {
+        const summary = resultMap.get(t.id);
+
+        if (!summary) {
+          throw new Error(`Summary not found for target ID: ${t.id}`);
+        }
+
+        if (!summary.shortSummary || !summary.detailedSummary) {
+          throw new Error(`Invalid GPT result for ${t.id}`);
+        }
+
+        return {
+          blogId: t.blogId,
+          title: t.title,
+          author: t.author,
+          shortSummary: summary.shortSummary,
+          detailedSummary: summary.detailedSummary,
+          sourceUrl: t.sourceUrl,
+          publishedAt: t.publishedAt,
+          categories: t.categories,
+        };
+      });
   }
 
   private async savePostWithCategories(preparedPosts: PreparedPost[]) {
@@ -252,17 +303,35 @@ export class RssService {
     }
   }
 
-  @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT, {
-    name: 'saveRssToPost',
-    timeZone: 'Asia/Seoul',
+  @Cron('*/30 * * * *', {
+    name: 'processGptBatchResult',
   })
-  async saveRssToPost() {
-    const feeds = await this.parseAllRss();
-    const preparedPosts = await this.preparePosts(feeds);
-    if (preparedPosts.length === 0) {
-      this.logger.log('저장할 게시글이 없습니다.');
-      return;
+  async processGptBatchResult() {
+    const pendingBatches = await this.batchMetaService.getPendingBatches();
+
+    for (const batchMeta of pendingBatches) {
+      const batch = await this.batchService.getBatch(batchMeta.batchId);
+
+      if (batch.status !== 'completed') continue;
+
+      const locked = await this.batchMetaService.markProcessing(batchMeta.batchId);
+
+      if (!locked) continue;
+
+      try {
+        const results = await this.batchService.getBatchResults(batch);
+  
+        const preparedPosts = this.mergeBatchResult(batchMeta.targets, results);
+  
+        await this.savePostWithCategories(preparedPosts);
+  
+        await this.batchMetaService.markCompleted(batchMeta.batchId);
+
+        this.batchService.cleanupBatchInput();
+      } catch (error) {
+        this.logger.error(`Batch 처리 실패: ${batchMeta.batchId}`, error);
+        await this.batchMetaService.markFailed(batchMeta.batchId);
+      }
     }
-    await this.savePostWithCategories(preparedPosts);
   }
 }
