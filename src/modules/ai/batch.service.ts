@@ -1,15 +1,15 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import * as fs from 'fs';
 import OpenAI from 'openai';
 import { Batch } from 'openai/resources';
 import { BatchInput, BatchResult } from 'src/common/types/batch.types';
+import { cronLogger } from 'src/logger/cron.logger';
 
 
 @Injectable()
 export class BatchService {
   private readonly openai: OpenAI;
-  private readonly logger = new Logger(BatchService.name);
-  private readonly filePath = `batch-input-${Date.now()}.jsonl`;;
+  private readonly filePath = `batch-input.jsonl`;
   constructor(
   ) {
     this.openai = new OpenAI({
@@ -73,7 +73,7 @@ export class BatchService {
         },
       }),
     );
-    fs.writeFileSync('batch-input.jsonl', lines.join('\n'), 'utf-8');
+    fs.writeFileSync(this.filePath, lines.join('\n'), 'utf-8');
   }
 
   async processBatch() {
@@ -86,14 +86,14 @@ export class BatchService {
         file: fs.createReadStream(this.filePath),
         purpose: 'batch',
       });
-      this.logger.log(`파일 업로드 완료: ${file.id}`);
+      cronLogger.info(`파일 업로드 완료: ${file.id}`);
 
       const batch = await this.openai.batches.create({
         input_file_id: file.id,
         endpoint: '/v1/responses',
         completion_window: '24h',
       });
-      this.logger.log(`배치 작업 생성: ${batch.id}, 상태: ${batch.status}`);
+      cronLogger.info(`배치 작업 생성: ${batch.id}, 상태: ${batch.status}`);
 
       return batch;
     } catch (error) {

@@ -13,6 +13,7 @@ import { Cron, CronExpression } from '@nestjs/schedule';
 import { BatchService } from '../ai/batch.service';
 import { BatchResult, BatchTarget } from 'src/common/types/batch.types';
 import { BatchMetaService } from '../ai/batch-meta.service';
+import { cronLogger } from 'src/logger/cron.logger';
 
 type PreparedPost = {
   blogId: number;
@@ -78,7 +79,7 @@ export class RssService {
           blogId: blog.id,
         }))
         .catch((error) => {
-          this.logger.error(`RSS 파싱 실패 (${blog.rssUrl}):`, error);
+          cronLogger.error(`RSS 파싱 실패 (${blog.rssUrl}):`, error);
           throw error;
         }),
     );
@@ -87,9 +88,9 @@ export class RssService {
 
     feeds.forEach((result, index) => {
       if (result.status === 'fulfilled') {
-        this.logger.log(`성공: ${blogs[index].name}`);
+        cronLogger.info(`성공: ${blogs[index].name}`);
       } else {
-        this.logger.error(
+        cronLogger.error(
           `실패: ${blogs[index].name} - ${result.reason instanceof Error ? result.reason.message : String(result.reason)}`,
         );
       }
@@ -162,7 +163,7 @@ export class RssService {
     for (const { item, blogId, sourceUrl } of feedItems) {
       let id = 0;
       if (existingUrls.has(sourceUrl)) {
-        this.logger.log(`이미 존재하는 게시글 건너뛰기: ${item.title}`);
+        cronLogger.info(`이미 존재하는 게시글 건너뛰기: ${item.title}`);
         continue;
       }
 
@@ -172,12 +173,12 @@ export class RssService {
         !item.fullContent ||
         item.fullContent.trim() === ''
       ) {
-        this.logger.log(`제목 또는 내용이 없는 게시글 건너뛰기: ${item.title}`);
+        cronLogger.info(`제목 또는 내용이 없는 게시글 건너뛰기: ${item.title}`);
         continue;
       }
 
       if (!validateKorean(item.title + item.fullContent)) {
-        this.logger.log(`한글이 아닌 게시글 건너뛰기: ${item.title}`);
+        cronLogger.info(`한글이 아닌 게시글 건너뛰기: ${item.title}`);
         continue;
       }
 
@@ -205,7 +206,7 @@ export class RssService {
     const targets = await this.prepareBatchTargets(feeds);
 
     if (targets.length === 0) {
-      this.logger.log('Batch 생성 대상 없음');
+      cronLogger.info('Batch 생성 대상 없음');
       return;
     }
 
@@ -274,7 +275,7 @@ export class RssService {
           });
 
           const savedPost = await manager.save(post);
-          this.logger.log(
+          cronLogger.info(
             `포스트 저장 완료: ${savedPost.title}\n 짧은 요약: ${savedPost.shortSummary}\n 상세 요약: ${savedPost.detailedSummary}`,
           );
 
@@ -282,7 +283,7 @@ export class RssService {
             !Array.isArray(postData.categories) ||
             postData.categories.length === 0
           ) {
-            this.logger.log(
+            cronLogger.info(
               `카테고리가 없는 게시글 건너뛰기: ${savedPost.title}`,
             );
             continue;
@@ -294,12 +295,12 @@ export class RssService {
               name: categoryName.trim().substring(0, 50),
             });
             await manager.save(category);
-            this.logger.log(`카테고리 저장 완료: ${category.name}`);
+            cronLogger.info(`카테고리 저장 완료: ${category.name}`);
           }
         }
       });
 
-      this.logger.log(`배치 저장 완료: ${i + 1} ~ ${i + chunk.length}`);
+      cronLogger.info(`배치 저장 완료: ${i + 1} ~ ${i + chunk.length}`);
     }
   }
 
@@ -329,7 +330,7 @@ export class RssService {
 
         this.batchService.cleanupBatchInput();
       } catch (error) {
-        this.logger.error(`Batch 처리 실패: ${batchMeta.batchId}`, error);
+        cronLogger.error(`Batch 처리 실패: ${batchMeta.batchId}`, error);
         await this.batchMetaService.markFailed(batchMeta.batchId);
       }
     }
