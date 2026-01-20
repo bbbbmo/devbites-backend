@@ -13,7 +13,7 @@ export class BatchMetaService {
 
   async saveBatchMeta(batchId: string, targets: BatchTarget[]): Promise<void> {
     await this.batchMetaRepository.save({
-      batchId,
+      batch_id: batchId,
       status: 'PENDING',
       targets,
     });

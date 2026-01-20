@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Post } from '../post/entities/post.entity';
 import { In, Repository } from 'typeorm';
@@ -34,8 +34,6 @@ type FeedItem = {
 
 @Injectable()
 export class RssService {
-  private readonly logger = new Logger(RssService.name);
-
   constructor(
     @InjectRepository(Post)
     private readonly postRepository: Repository<Post>,
