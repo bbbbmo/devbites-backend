@@ -26,19 +26,19 @@ export class PostService {
       ])
 
       if (blogId) {
-        query.andWhere('post.blogId = :blogId', { blogId });
+        query.andWhere('post.blog_id = :blogId', { blogId }); 
       }
       if (title) {
         query.andWhere('post.title LIKE :title', { title: `%${title}%` });
       }
       if (shortSummary) {
-        query.andWhere('post.shortSummary LIKE :shortSummary', { shortSummary: `%${shortSummary}%` });
+        query.andWhere('post.short_summary LIKE :shortSummary', { shortSummary: `%${shortSummary}%` });
       }
 
       if (sort === 'latest') {
-        query.orderBy('post.publishedAt', 'DESC');
+        query.orderBy('post.published_at', 'DESC');
       } else {
-        query.orderBy('post.publishedAt', 'ASC');
+        query.orderBy('post.published_at', 'ASC');
       }
 
       return await query.getMany();
