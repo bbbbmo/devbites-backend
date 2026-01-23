@@ -1,5 +1,5 @@
-import { BatchTarget } from "src/common/types/batch.types";
-import { Column, Entity, PrimaryGeneratedColumn } from "typeorm";
+import { BatchTarget } from 'src/common/types/batch.types';
+import { Column, Entity, PrimaryGeneratedColumn } from 'typeorm';
 
 @Entity('batch_meta')
 export class BatchMeta {

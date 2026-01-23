@@ -3,7 +3,6 @@ import { Post } from './entities/post.entity';
 import { PostService } from './post.service';
 import type { GetPostsParams } from 'src/common/types/post.types';
 
-
 @Controller('post')
 export class PostController {
   constructor(private readonly postService: PostService) {}

@@ -13,8 +13,8 @@ export class PostService {
 
   async getPosts(params: GetPostsParams): Promise<Post[]> {
     const { blogId, title, shortSummary, sort = 'latest' } = params;
-    
-   const query = this.postRepository
+
+    const query = this.postRepository
       .createQueryBuilder('post')
       .leftJoinAndSelect('post.blog', 'blog')
       .leftJoinAndSelect('post.rssCategories', 'rssCategories')
@@ -23,25 +23,27 @@ export class PostService {
         'blog',
         'rssCategories.id',
         'rssCategories.name', // postId 제외
-      ])
+      ]);
 
-      if (blogId) {
-        query.andWhere('post.blog_id = :blogId', { blogId }); 
-      }
-      if (title) {
-        query.andWhere('post.title LIKE :title', { title: `%${title}%` });
-      }
-      if (shortSummary) {
-        query.andWhere('post.short_summary LIKE :shortSummary', { shortSummary: `%${shortSummary}%` });
-      }
+    if (blogId) {
+      query.andWhere('post.blog_id = :blogId', { blogId });
+    }
+    if (title) {
+      query.andWhere('post.title LIKE :title', { title: `%${title}%` });
+    }
+    if (shortSummary) {
+      query.andWhere('post.short_summary LIKE :shortSummary', {
+        shortSummary: `%${shortSummary}%`,
+      });
+    }
 
-      if (sort === 'latest') {
-        query.orderBy('post.published_at', 'DESC');
-      } else {
-        query.orderBy('post.published_at', 'ASC');
-      }
+    if (sort === 'latest') {
+      query.orderBy('post.published_at', 'DESC');
+    } else {
+      query.orderBy('post.published_at', 'ASC');
+    }
 
-      return await query.getMany();
+    return await query.getMany();
   }
 
   async getPostById(id: number): Promise<Post | null> {
