@@ -1,19 +1,19 @@
-import { Injectable } from "@nestjs/common";
-import { InjectRepository } from "@nestjs/typeorm";
-import { Repository } from "typeorm";
-import { BatchMeta } from "./entities/batch-meta.entity";
-import { BatchTarget } from "src/common/types/batch.types";
+import { Injectable } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+import { BatchMeta } from './entities/batch-meta.entity';
+import { BatchTarget } from 'src/common/types/batch.types';
 
 @Injectable()
 export class BatchMetaService {
   constructor(
     @InjectRepository(BatchMeta)
-    private readonly batchMetaRepository: Repository<BatchMeta>
+    private readonly batchMetaRepository: Repository<BatchMeta>,
   ) {}
 
   async saveBatchMeta(batchId: string, targets: BatchTarget[]): Promise<void> {
     await this.batchMetaRepository.save({
-      batch_id: batchId,
+      batchId: batchId,
       status: 'PENDING',
       targets,
     });
