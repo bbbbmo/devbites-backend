@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Post } from './entities/post.entity';
 import { Repository } from 'typeorm';
-import { GetPostsParams } from 'src/common/types/post.types';
+import { GetPostsParams, GetPostsResponse } from 'src/common/types/post.types';
 
 @Injectable()
 export class PostService {
@@ -11,8 +11,15 @@ export class PostService {
     private postRepository: Repository<Post>,
   ) {}
 
-  async getPosts(params: GetPostsParams): Promise<Post[]> {
-    const { blogId, title, shortSummary, sort = 'latest' } = params;
+  async getPosts(params: GetPostsParams): Promise<GetPostsResponse> {
+    const {
+      blogId,
+      title,
+      shortSummary,
+      sort = 'latest',
+      page = 1,
+      size = 20,
+    } = params;
 
     const query = this.postRepository
       .createQueryBuilder('post')
@@ -37,13 +44,24 @@ export class PostService {
       });
     }
 
-    if (sort === 'latest') {
-      query.orderBy('post.published_at', 'DESC');
-    } else {
-      query.orderBy('post.published_at', 'ASC');
-    }
+    query.orderBy('post.published_at', sort === 'latest' ? 'DESC' : 'ASC');
 
-    return await query.getMany();
+    const items = await query
+      .clone()
+      .orderBy('post.publishedAt', sort === 'latest' ? 'DESC' : 'ASC')
+      .take(size)
+      .skip((page - 1) * size)
+      .getMany();
+
+    const total = await query.clone().getCount();
+
+    const hasMore = page * size < total;
+
+    return {
+      items,
+      total,
+      hasMore,
+    };
   }
 
   async getPostById(id: number): Promise<Post | null> {

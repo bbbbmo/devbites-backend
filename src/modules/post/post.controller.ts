@@ -1,14 +1,17 @@
 import { Controller, Get, Param, Query } from '@nestjs/common';
 import { Post } from './entities/post.entity';
 import { PostService } from './post.service';
-import type { GetPostsParams } from 'src/common/types/post.types';
+import type {
+  GetPostsParams,
+  GetPostsResponse,
+} from 'src/common/types/post.types';
 
 @Controller('post')
 export class PostController {
   constructor(private readonly postService: PostService) {}
 
   @Get()
-  async getPosts(@Query() params: GetPostsParams): Promise<Post[]> {
+  async getPosts(@Query() params: GetPostsParams): Promise<GetPostsResponse> {
     return await this.postService.getPosts(params);
   }
 
