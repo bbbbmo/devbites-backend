@@ -5,13 +5,11 @@ import { Batch } from 'openai/resources';
 import { BatchInput, BatchResult } from 'src/common/types/batch.types';
 import { cronLogger } from 'src/logger/cron.logger';
 
-
 @Injectable()
 export class BatchService {
   private readonly openai: OpenAI;
   private readonly filePath = `batch-input.jsonl`;
-  constructor(
-  ) {
+  constructor() {
     this.openai = new OpenAI({
       apiKey: process.env.OPENAI_API_KEY,
     });
@@ -53,7 +51,7 @@ export class BatchService {
   createBatchInput(posts: BatchInput[]) {
     const lines = posts.map((post) =>
       JSON.stringify({
-        custom_id: post.id,
+        custom_id: String(post.id),
         method: 'POST',
         url: '/v1/responses',
         body: {
@@ -123,10 +121,10 @@ export class BatchService {
     const file = await this.openai.files.content(batch.output_file_id);
     const text = await file.text();
     const lines = text
-    .split('\n')
-    .map((line) => line.trim())
-    .filter((line) => line.length > 0);
-  
+      .split('\n')
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0);
+
     return lines.map((line) => JSON.parse(line) as BatchResult);
   }
 
