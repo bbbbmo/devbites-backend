@@ -306,24 +306,40 @@ export class RssService {
     name: 'processGptBatchResult',
   })
   async processGptBatchResult() {
+    cronLogger.info('=== GPT Batch 결과 처리 크론 시작 ===');
     const pendingBatches = await this.batchMetaService.getPendingBatches();
+    cronLogger.info(`대기 중인 BatchMeta 개수: ${pendingBatches.length}`);
 
     for (const batchMeta of pendingBatches) {
       const batch = await this.batchService.getBatch(batchMeta.batchId);
+      cronLogger.info(
+        `Batch 상태 확인 - batchId: ${batchMeta.batchId}, status: ${batch.status}`,
+      );
 
-      if (batch.status !== 'completed') continue;
+      if (batch.status !== 'completed') {
+        cronLogger.info(
+          `Batch 상태가 completed 아님. 건너뜀 - batchId: ${batchMeta.batchId}`,
+        );
+        continue;
+      }
 
-      const locked = await this.batchMetaService.markProcessing(batchMeta.batchId);
+      const locked = await this.batchMetaService.markProcessing(
+        batchMeta.batchId,
+      );
 
       if (!locked) continue;
 
       try {
         const results = await this.batchService.getBatchResults(batch);
-  
+        cronLogger.info(
+          `Batch 결과 조회 완료 - batchId: ${batchMeta.batchId}, 결과 개수: ${results.length}`,
+        );
+
         const preparedPosts = this.mergeBatchResult(batchMeta.targets, results);
-  
+
         await this.savePostWithCategories(preparedPosts);
-  
+        cronLogger.info(`포스트 저장 완료 - batchId: ${batchMeta.batchId}`);
+
         await this.batchMetaService.markCompleted(batchMeta.batchId);
 
         this.batchService.cleanupBatchInput();
@@ -332,5 +348,6 @@ export class RssService {
         await this.batchMetaService.markFailed(batchMeta.batchId);
       }
     }
+    cronLogger.info('=== GPT Batch 결과 처리 크론 종료 ===');
   }
 }
