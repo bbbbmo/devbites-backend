@@ -316,6 +316,12 @@ export class RssService {
         `Batch 상태 확인 - batchId: ${batchMeta.batchId}, status: ${batch.status}`,
       );
 
+      if (batch.status === 'failed') {
+        cronLogger.error(`Batch 실패 - batchId: ${batchMeta.batchId}`);
+        await this.batchMetaService.markFailed(batchMeta.batchId);
+        continue;
+      }
+
       if (batch.status !== 'completed') {
         cronLogger.info(
           `Batch 상태가 completed 아님. 건너뜀 - batchId: ${batchMeta.batchId}`,

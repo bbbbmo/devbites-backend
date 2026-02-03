@@ -66,7 +66,7 @@ export class BatchService {
               content: this.getPrompt(post.content),
             },
           ],
-          response_format: { type: 'json_object' },
+          text: { format: { type: 'json_object' } },
           temperature: 0.2,
         },
       }),
