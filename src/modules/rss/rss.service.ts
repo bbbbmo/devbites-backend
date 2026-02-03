@@ -154,12 +154,12 @@ export class RssService {
     }>[],
   ): Promise<BatchTarget[]> {
     const targets: BatchTarget[] = [];
+    let id = 0;
 
     const { allSourceUrls, feedItems } = this.collectFeedItems(feeds);
     const existingUrls = await this.getExistingFeedItem(allSourceUrls);
 
     for (const { item, blogId, sourceUrl } of feedItems) {
-      let id = 0;
       if (existingUrls.has(sourceUrl)) {
         cronLogger.info(`이미 존재하는 게시글 건너뛰기: ${item.title}`);
         continue;
