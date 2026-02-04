@@ -11,7 +11,11 @@ import { DataSource } from 'typeorm';
 import { validateKorean } from 'src/common/utils/validateKorean';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { BatchService } from '../ai/batch.service';
-import { BatchResult, BatchTarget } from 'src/common/types/batch.types';
+import {
+  BatchResult,
+  BatchTarget,
+  SummaryResponse,
+} from 'src/common/types/batch.types';
 import { BatchMetaService } from '../ai/batch-meta.service';
 import { cronLogger } from 'src/logger/cron.logger';
 
@@ -225,7 +229,12 @@ export class RssService {
     results: BatchResult[],
   ): PreparedPost[] {
     const resultMap = new Map(
-      results.map((r) => [Number(r.custom_id), r.response.output_parsed]),
+      results.map((r) => [
+        Number(r.custom_id),
+        JSON.parse(
+          r.response.body.output[0].content[0].text,
+        ) as SummaryResponse,
+      ]),
     );
 
     return targets

@@ -125,7 +125,9 @@ export class BatchService {
       .map((line) => line.trim())
       .filter((line) => line.length > 0);
 
-    return lines.map((line) => JSON.parse(line) as BatchResult);
+    return lines
+      .map((line) => JSON.parse(line) as BatchResult)
+      .filter((result) => result.response.status_code === 200);
   }
 
   /**
