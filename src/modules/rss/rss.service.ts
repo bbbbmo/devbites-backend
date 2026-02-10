@@ -311,7 +311,7 @@ export class RssService {
     }
   }
 
-  @Cron('*/30 * * * *', {
+  @Cron('30 * * * *', {
     name: 'processGptBatchResult',
   })
   async processGptBatchResult() {
