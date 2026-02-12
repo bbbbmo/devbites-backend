@@ -3,8 +3,10 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { PostModule } from './modules/post/post.module';
 import { ConfigModule } from '@nestjs/config';
 import { BlogModule } from './modules/blog/blog.module';
+import { AuthModule } from './modules/auth/auth.module';
 import { RssModule } from './modules/rss/rss.module';
 import { ScheduleModule } from '@nestjs/schedule';
+import { SubscriptionModule } from './modules/subcription/subscription.module';
 
 @Module({
   imports: [
@@ -24,6 +26,8 @@ import { ScheduleModule } from '@nestjs/schedule';
     }),
     ScheduleModule.forRoot(),
     PostModule,
+    AuthModule,
+    SubscriptionModule,
     BlogModule,
     RssModule,
   ],
